@@ -2,47 +2,21 @@ import { FEMALE_AURAS, MALE_AURAS, NEUTRAL_AURAS, TV_CHARACTERS } from './auraTy
 
 export async function analyzeProfile(imageBase64: string, username: string) {
   const allAuras = {
-    female: FEMALE_AURAS.join(', '),
-    male: MALE_AURAS.join(', '),
-    neutral: NEUTRAL_AURAS.join(', ')
+    female: FEMALE_AURAS.slice(0, 20).join(', '),
+    male: MALE_AURAS.slice(0, 20).join(', '),
+    neutral: NEUTRAL_AURAS.slice(0, 10).join(', ')
   }
 
-  const tvList = TV_CHARACTERS.map(c => `${c.name} (${c.show})`).join(', ')
+  const tvList = TV_CHARACTERS.slice(0, 15).map(c => `${c.name} (${c.show})`).join(', ')
 
-  const prompt = `You are VibeCheck — an AI that analyzes Instagram profiles for entertainment purposes only.
+  const prompt = `Analyze this Instagram profile image for @${username} and return ONLY a JSON object with no extra text, no markdown, no backticks.
 
-Analyze this Instagram profile screenshot/image for user @${username}.
+Return exactly this JSON:
+{"auraType":"Old Money Heiress","auraGender":"female","auraDescription":"You project exclusivity without trying. Your feed feels curated not performed.","attractionFactor":8.5,"mysteryLevel":"high","tvCharacter":"Blair Waldorf","tvShow":"Gossip Girl","tvEmoji":"👸","tvReason":"Same quiet authority that makes people nervous.","assumption":"You never text first and everyone knows it.","redFlags":["Replies late on purpose","Overthinks captions","Hard to read"],"greenFlags":["Fiercely loyal","Knows what she wants","Zero fake energy"],"roast":"Your feed looks like a mood board that became sentient and started posting."}
 
-You must respond ONLY with a valid JSON object. No extra text. No markdown. No explanation.
+But customize ALL values based on what you actually see in the image. Available aura types female: ${allAuras.female}. Male: ${allAuras.male}. Neutral: ${allAuras.neutral}. TV characters: ${tvList}.
 
-Rules:
-- Analyze ONLY visual aesthetic, style, fashion, poses, color palette, energy, facial expressions, photography style
-- IGNORE followers, likes, engagement metrics
-- Pick ONE aura type that best fits — be decisive, never give multiple
-- The result should feel like a personality test — eerily accurate and shareable
-- Keep roast playful, never mean
-
-Available Female Aura Types: ${allAuras.female}
-Available Male Aura Types: ${allAuras.male}
-Available Neutral Aura Types: ${allAuras.neutral}
-Available TV Characters: ${tvList}
-
-Respond with exactly this JSON structure:
-{
-  "auraType": "exact aura type from the list above",
-  "auraGender": "female" or "male" or "neutral",
-  "auraDescription": "2-3 sentences describing why this aura fits. Second person, present tense. Make it feel like a horoscope.",
-  "attractionFactor": 7.5,
-  "mysteryLevel": "low" or "medium" or "high" or "very high",
-  "tvCharacter": "exact character name from list",
-  "tvShow": "show name",
-  "tvEmoji": "one emoji",
-  "tvReason": "one sentence why they match this character",
-  "assumption": "one single eerily accurate statement about what people assume. Start with 'You'. Make it feel true.",
-  "redFlags": ["flag 1", "flag 2", "flag 3"],
-  "greenFlags": ["flag 1", "flag 2", "flag 3"],
-  "roast": "one funny, playful roast. Never mean. Max 2 sentences."
-}`
+IMPORTANT: Return ONLY the JSON. Nothing else.`
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -52,25 +26,39 @@ Respond with exactly this JSON structure:
       body: JSON.stringify({
         contents: [{
           parts: [
-            {
-              inline_data: {
-                mime_type: 'image/jpeg',
-                data: imageBase64
-              }
-            },
+            { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } },
             { text: prompt }
           ]
         }],
-        generationConfig: {
-          temperature: 0.8,
+        generationConfig: { 
+          temperature: 0.7, 
           maxOutputTokens: 800,
+          responseMimeType: 'application/json'
         }
       })
     }
   )
 
   const json = await response.json()
-  const raw = json.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  
+  // Log full response for debugging
+  console.log('Gemini status:', response.status)
+  console.log('Gemini response:', JSON.stringify(json).slice(0, 500))
+
+  if (!response.ok) {
+    throw new Error(`Gemini API error ${response.status}: ${JSON.stringify(json).slice(0, 200)}`)
+  }
+
+  const raw = json.candidates?.[0]?.content?.parts?.[0]?.text
+  
+  if (!raw) {
+    // Check for safety blocks
+    const blockReason = json.candidates?.[0]?.finishReason
+    const safetyRatings = json.candidates?.[0]?.safetyRatings
+    console.log('Block reason:', blockReason, 'Safety:', JSON.stringify(safetyRatings))
+    throw new Error(`Empty response from Gemini. Reason: ${blockReason || 'unknown'}`)
+  }
+
   const clean = raw.replace(/```json|```/g, '').trim()
   return JSON.parse(clean)
 }
