@@ -1,29 +1,5 @@
 import { FEMALE_AURAS, MALE_AURAS, NEUTRAL_AURAS, TV_CHARACTERS } from './auraTypes'
 
-async function callGemini(imageBase64: string, prompt: string) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } },
-            { text: prompt }
-          ]
-        }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 800,
-          responseMimeType: 'application/json'
-        }
-      })
-    }
-  )
-  return response
-}
-
 export async function analyzeProfile(imageBase64: string, username: string) {
   const allAuras = {
     female: FEMALE_AURAS.slice(0, 20).join(', '),
@@ -42,28 +18,40 @@ Pick the aura type from: Female: ${allAuras.female}. Male: ${allAuras.male}. Neu
 Pick TV character from: ${tvList}.
 Return ONLY the JSON, nothing else.`
 
-  let response = await callGemini(imageBase64, prompt)
-
-  // If rate limited, wait 5s and retry once
-  if (response.status === 429) {
-    await new Promise(r => setTimeout(r, 5000))
-    response = await callGemini(imageBase64, prompt)
-  }
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'llama-3.2-90b-vision-preview',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
+          ]
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 800,
+      response_format: { type: 'json_object' }
+    })
+  })
 
   const json = await response.json()
 
   if (!response.ok) {
-    if (response.status === 429) {
-      throw new Error('RATE_LIMITED')
-    }
-    console.error('Gemini error:', JSON.stringify(json).slice(0, 300))
+    console.error('Groq error:', JSON.stringify(json).slice(0, 400))
     throw new Error('ANALYSIS_FAILED')
   }
 
-  const raw = json.candidates?.[0]?.content?.parts?.[0]?.text
+  const raw = json.choices?.[0]?.message?.content
 
   if (!raw) {
-    console.error('Empty Gemini response:', JSON.stringify(json).slice(0, 300))
+    console.error('Empty Groq response:', JSON.stringify(json).slice(0, 300))
     throw new Error('ANALYSIS_FAILED')
   }
 
