@@ -87,7 +87,7 @@ export default function Home() {
 
       fetch('/api/counter', { method: 'POST' }).then(r => r.json()).then(d => { if (d.count) setCount(d.count) }).catch(() => {})
 
-      sessionStorage.setItem('vibecheck_result', JSON.stringify(json))
+      sessionStorage.setItem('vibecheck_result', JSON.stringify({ ...json, imageUrl: `data:image/jpeg;base64,${imageBase64}` }))
       router.push('/result')
 
     } catch (e: any) {
