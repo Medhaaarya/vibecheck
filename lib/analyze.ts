@@ -1,21 +1,31 @@
 import { FEMALE_AURAS, MALE_AURAS, NEUTRAL_AURAS, TV_CHARACTERS } from './auraTypes'
 
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 export async function analyzeProfile(imageBase64: string, username: string) {
   const allAuras = {
-    female: FEMALE_AURAS.slice(0, 20).join(', '),
-    male: MALE_AURAS.slice(0, 20).join(', '),
-    neutral: NEUTRAL_AURAS.slice(0, 10).join(', ')
+    female: shuffle(FEMALE_AURAS).slice(0, 20).join(', '),
+    male: shuffle(MALE_AURAS).slice(0, 20).join(', '),
+    neutral: shuffle(NEUTRAL_AURAS).slice(0, 10).join(', ')
   }
 
-  const tvList = TV_CHARACTERS.slice(0, 15).map(c => `${c.name} (${c.show})`).join(', ')
+  const tvList = shuffle(TV_CHARACTERS).map(c => `${c.name} (${c.show})`).join(', ')
 
   const prompt = `Analyze this Instagram profile image for @${username} and return ONLY a JSON object with no extra text, no markdown, no backticks.
 
-Return exactly this JSON shape (customize all values based on the image):
-{"auraType":"Old Money Heiress","auraGender":"female","auraDescription":"2-3 sentences, second person, horoscope feel.","attractionFactor":8.5,"mysteryLevel":"high","tvCharacter":"Blair Waldorf","tvShow":"Gossip Girl","tvEmoji":"👸","tvReason":"one sentence","assumption":"one eerily accurate statement starting with You","redFlags":["flag1","flag2","flag3"],"greenFlags":["flag1","flag2","flag3"],"roast":"one playful roast, never mean"}
+Return exactly this JSON shape with keys auraType, auraGender, auraDescription, attractionFactor (number 1-10), mysteryLevel (low/medium/high/very high), tvCharacter, tvShow, tvEmoji (one emoji), tvReason, assumption (starts with "You"), redFlags (array of 3), greenFlags (array of 3), roast (playful, never mean).
 
 Pick the aura type from: Female: ${allAuras.female}. Male: ${allAuras.male}. Neutral: ${allAuras.neutral}.
-Pick TV character from: ${tvList}.
+
+For tvCharacter: the list below is intentionally shuffled. Pick whichever character's vibe genuinely matches the image — judge purely on look, energy, and style. Do not have a default favorite. Options: ${tvList}.
+
 Return ONLY the JSON, nothing else.`
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -35,7 +45,7 @@ Return ONLY the JSON, nothing else.`
           ]
         }
       ],
-      temperature: 0.7,
+      temperature: 0.9,
       max_tokens: 800,
       response_format: { type: 'json_object' }
     })
