@@ -10,9 +10,9 @@ export default function Home() {
   const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [showUploadHighlight, setShowUploadHighlight] = useState(false)
-  const [count, setCount] = useState(2847)
   const fileRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  const [count, setCount] = useState(2847)
 
   useEffect(() => {
     fetch('/api/counter').then(r => r.json()).then(d => { if (d.count) setCount(d.count) }).catch(() => {})
@@ -45,6 +45,7 @@ export default function Home() {
       let imageBase64: string | null = null
       let finalUsername = username.trim() || 'unknown'
 
+      // Try scraping if username given and no file
       if (username.trim() && !file) {
         const scrapeRes = await fetch(`/api/scrape?username=${encodeURIComponent(username.trim())}`)
         const scrapeData = await scrapeRes.json()
@@ -53,6 +54,7 @@ export default function Home() {
           imageBase64 = scrapeData.profilePicBase64
           finalUsername = scrapeData.username || username.trim()
         } else {
+          // Scrape failed — highlight upload box
           setShowUploadHighlight(true)
           setError("Couldn't fetch this profile. Upload a screenshot instead.")
           setLoading(false)
@@ -61,6 +63,7 @@ export default function Home() {
         }
       }
 
+      // File uploaded — convert to base64
       if (file && !imageBase64) {
         const buf = await file.arrayBuffer()
         const bytes = new Uint8Array(buf)
@@ -71,6 +74,7 @@ export default function Home() {
 
       if (!imageBase64) throw new Error('No image to analyze')
 
+      // Send to analyze API
       const byteChars = atob(imageBase64)
       const byteArray = new Uint8Array(byteChars.length)
       for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i)
@@ -85,13 +89,14 @@ export default function Home() {
 
       if (!res.ok || !json.success) throw new Error(json.error || 'Analysis failed')
 
+      // Increment counter
       fetch('/api/counter', { method: 'POST' }).then(r => r.json()).then(d => { if (d.count) setCount(d.count) }).catch(() => {})
 
       sessionStorage.setItem('vibecheck_result', JSON.stringify(json))
       router.push('/result')
 
     } catch (e: any) {
-      setError('Please try later!')
+      setError(e.message || 'Something went wrong. Try again.')
     } finally {
       setLoading(false)
       clearInterval(interval)
@@ -134,6 +139,7 @@ export default function Home() {
         </p>
 
         <div style={{ width: '100%', maxWidth: 420 }}>
+          {/* Username input */}
           <div style={{
             display: 'flex', background: 'rgba(255,255,255,0.05)',
             border: `1.5px solid ${username ? 'rgba(249,83,198,0.4)' : 'rgba(255,255,255,0.1)'}`,
@@ -161,12 +167,14 @@ export default function Home() {
             </button>
           </div>
 
+          {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
             <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
             <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)', fontWeight: 600, letterSpacing: '0.08em' }}>or</span>
             <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
           </div>
 
+          {/* Upload box */}
           <div
             onClick={() => !loading && fileRef.current?.click()}
             onDragOver={e => { e.preventDefault(); setDragOver(true) }}
@@ -191,7 +199,7 @@ export default function Home() {
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
 
           {error && (
-            <p style={{ fontSize: 13, color: '#f953c6', marginTop: 14, textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>{error}</p>
+            <p style={{ fontSize: 12, color: '#f953c6', marginTop: 12, textAlign: 'center', lineHeight: 1.5 }}>{error}</p>
           )}
 
           {loading && (
